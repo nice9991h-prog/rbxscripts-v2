@@ -66,7 +66,6 @@ app.use((req, res, next) => {
   return next();
 });
 
-// Default MemoryStore is intentional for this single-process Termux server.
 app.use(session({
   name: "yu_admin_session",
   secret: sessionSecret,
@@ -178,10 +177,10 @@ function normalizeConfig(input) {
     enabled: bool(item.enabled)
   }));
 
-  if (!/^[\w-]{1,60}$/.test(id) {
-    throw new Error("Invalid section.");
-  }
-  const sections = Object.fromEntries(Object.entries(input.sections).map(([id, item]) => {
+  const sectionSource = input.sections && typeof input.sections === "object" && !Array.isArray(input.sections)
+    ? input.sections
+    : {};
+  const sections = Object.fromEntries(Object.entries(sectionSource).map(([id, item]) => {
     if (!/^[\w-]{1,60}$/.test(id) || !item || typeof item !== "object") {
       throw new Error("Invalid section.");
     }
@@ -192,7 +191,7 @@ function normalizeConfig(input) {
   }));
 
   const ui = input.ui || {};
-  const accent = color(ui.accent || ui.accentColor);
+  const accent = color(ui.accent || ui.accentColor || "#14a8ff");
   const footer = text(ui.footer || ui.footerText || "", "Footer text", false, 500);
   const quickLinks = list(input.quickLinks || [], "Quick links").map((item, i) => ({
     id: String(item.id || `quick-${i + 1}`),
