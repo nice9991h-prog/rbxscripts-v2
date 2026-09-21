@@ -1,23 +1,36 @@
+require("dotenv").config();
+
 const path = require('node:path');
-const fs = require('node:fs');
 const express = require('express');
 const session = require('express-session');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { getConfig, saveConfig } = require('./db');
+const { readConfig, writeConfig } = require('./db');
 
 const app = express();
+const root = __dirname;
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = process.env.SESSION_SECRET;
 const adminUsername = process.env.ADMIN_USERNAME;
 const adminPassword = process.env.ADMIN_PASSWORD;
-const root = __dirname;
 
-if (!sessionSecret || sessionSecret.length < 32) throw new Error('SESSION_SECRET must be set to at least 32 characters.');
-if (!adminUsername || !adminPassword) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be set.');
-if (adminPassword === 'CHANGE_THIS_PASSWORD') throw new Error('Set a strong ADMIN_PASSWORD before starting.');
+if (!sessionSecret || sessionSecret.length < 32) {
+  throw new Error('SESSION_SECRET must be set to at least 32 characters.');
+}
+if (!adminUsername || !adminPassword) {
+  throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be set.');
+}
+if (adminPassword === 'CHANGE_THIS_PASSWORD') {
+  throw new Error('Set a strong ADMIN_PASSWORD before starting.');
+}
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error('PORT must be a valid TCP port.');
+}
+
+// Hash the environment password once. The hash is held only in server memory.
+const adminPasswordHash = bcrypt.hash(adminPassword, 12);
 
 app.disable('x-powered-by');
 app.set('trust proxy', isProduction ? 1 : false);
@@ -29,7 +42,9 @@ function sameOrigin(req, res, next) {
   const origin = req.get('origin');
   if (origin) {
     const ownOrigin = `${req.protocol}://${req.get('host')}`;
-    if (origin !== ownOrigin && !allowedOrigins.includes(origin)) return res.status(403).json({ error: 'Invalid request origin.' });
+    if (origin !== ownOrigin && !allowedOrigins.includes(origin)) {
+      return res.status(403).json({ error: 'Invalid request origin.' });
+    }
   }
   next();
 }
@@ -46,8 +61,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// This uses express-session's dependency-free in-memory store for Termux compatibility.
-// For multi-process production deployments, replace it with a remote session store.
+// MemoryStore is intentional for this single-process local Termux development server.
 app.use(session({
   name: 'yu_admin_session',
   secret: sessionSecret,
@@ -58,32 +72,98 @@ app.use(session({
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const sendError = (res, status, message) => res.status(status).json({ error: message });
-function requireAdmin(req, res, next) { return req.session?.admin?.id ? next() : sendError(res, 401, 'Authentication required.'); }
-function text(value, name, required = false, max = 5000) { if (typeof value !== 'string') { if (required) throw new Error(`${name} is required.`); return ''; } const result = value.trim(); if (required && !result) throw new Error(`${name} is required.`); if (result.length > max) throw new Error(`${name} is too long.`); return result; }
-function list(value, name) { if (!Array.isArray(value) || value.length > 200) throw new Error(`${name} must be an array.`); return value; }
+function requireAdmin(req, res, next) {
+  return req.session?.admin?.id ? next() : sendError(res, 401, 'Authentication required.');
+}
+function text(value, name, required = false, max = 5000) {
+  if (typeof value !== 'string') {
+    if (required) throw new Error(`${name} is required.`);
+    return '';
+  }
+  const result = value.trim();
+  if (required && !result) throw new Error(`${name} is required.`);
+  if (result.length > max) throw new Error(`${name} is too long.`);
+  return result;
+}
+function list(value, name) {
+  if (!Array.isArray(value) || value.length > 200) throw new Error(`${name} must be an array.`);
+  return value;
+}
 function bool(value, fallback = true) { return typeof value === 'boolean' ? value : fallback; }
-function checkedUrl(value, name, required = false) { const result = text(value || '', name, required, 2000); if (!result || result === '#' || result.startsWith('mailto:')) return result; try { const parsed = new URL(result); if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString(); } catch {} throw new Error(`${name} must be a valid HTTP or HTTPS URL.`); }
-function color(value) { const result = text(value || '#14a8ff', 'Accent color', true, 20); if (!/^#[0-9a-f]{6}$/i.test(result)) throw new Error('Accent color must be a hex color.'); return result; }
+function checkedUrl(value, name, required = false) {
+  const result = text(value || '', name, required, 2000);
+  if (!result || result === '#' || result.startsWith('mailto:')) return result;
+  try {
+    const url = new URL(result);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+    return url.toString();
+  } catch { throw new Error(`${name} must be a valid URL.`); }
+}
+function color(value) {
+  const result = text(value || '#14a8ff', 'Accent color', true, 20);
+  if (!/^#[0-9a-f]{6}$/i.test(result)) throw new Error('Accent color must be a hex color.');
+  return result;
+}
 function normalizeConfig(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Configuration must be an object.');
   const p = input.profile || {};
-  const profile = { name: text(p.name, 'Profile name', true, 120), verified: bool(p.verified, false), role: text(p.role, 'Role', true, 180), quote: text(p.quote || '', 'Quote', false, 300), bio: text(p.bio, 'Bio', true), location: text(p.location || '', 'Location', false, 120), joined: text(p.joined || p.joinedDate || '', 'Joined date', false, 120), joinedDate: text(p.joinedDate || p.joined || '', 'Joined date', false, 120), platform: text(p.platform || 'Roblox', 'Platform', false, 80), image: text(p.image || p.profileImage || '', 'Profile image', false, 2000), profileImage: text(p.profileImage || p.image || '', 'Profile image', false, 2000) };
-  const socials = list(input.socials || [], 'Social links').map((item, i) => ({ id: String(item.id || `social-${i + 1}`), title: text(item.title, 'Social title', true, 100), icon: text(item.icon || '◉', 'Social icon', false, 20), url: checkedUrl(item.url, 'Social URL'), enabled: bool(item.enabled) }));
-  const stats = list(input.stats || [], 'Stats').map((item, i) => ({ id: String(item.id || `stat-${i + 1}`), label: text(item.label, 'Stat label', true, 80), value: text(String(item.value ?? ''), 'Stat value', true, 80), icon: text(item.icon || '★', 'Stat icon', false, 20), enabled: bool(item.enabled) }));
-  const scripts = list(input.scripts || [], 'Scripts').map((item, i) => ({ id: String(item.id || `script-${i + 1}`), name: text(item.name, 'Script name', true, 160), description: text(item.description || '', 'Script description', false, 2000), url: checkedUrl(item.url, 'Script URL', true), tags: list(item.tags || [], 'Script tags').map(tag => text(tag, 'Script tag', true, 40)), thumbnail: text(item.thumbnail || '', 'Thumbnail', false, 2000), enabled: bool(item.enabled) }));
+  const profile = {
+    name: text(p.name, 'Profile name', true, 120), verified: bool(p.verified, false),
+    role: text(p.role, 'Role', true, 180), quote: text(p.quote || '', 'Quote', false, 300),
+    bio: text(p.bio || '', 'Bio', false, 3000), location: text(p.location || '', 'Location', false, 120),
+    joined: text(p.joined || '', 'Joined', false, 120), platform: text(p.platform || '', 'Platform', false, 120),
+    image: text(p.image || '', 'Profile image', false, 1000)
+  };
+  const socials = list(input.socials || [], 'Social links').map((item, i) => ({
+    id: String(item.id || `social-${i + 1}`), title: text(item.title, 'Social title', true, 100),
+    icon: text(item.icon || '◉', 'Social icon', false, 20), url: checkedUrl(item.url, 'Social URL', true), enabled: bool(item.enabled)
+  }));
+  const stats = list(input.stats || [], 'Stats').map((item, i) => ({
+    id: String(item.id || `stat-${i + 1}`), icon: text(item.icon || '★', 'Stat icon', false, 20),
+    label: text(item.label, 'Stat label', true, 80), value: text(String(item.value ?? ''), 'Stat value', true, 80)
+  }));
+  const scripts = list(input.scripts || [], 'Scripts').map((item, i) => ({
+    id: String(item.id || `script-${i + 1}`), name: text(item.name, 'Script name', true, 160),
+    description: text(item.description || '', 'Script description', false, 500), url: checkedUrl(item.url, 'Script URL', true),
+    tags: list(item.tags || [], 'Script tags').map(tag => text(String(tag), 'Script tag', true, 40)),
+    thumbnail: text(item.thumbnail || '', 'Script thumbnail', false, 1000), enabled: bool(item.enabled)
+  }));
   if (!input.sections || typeof input.sections !== 'object' || Array.isArray(input.sections)) throw new Error('Sections must be an object.');
-  const sections = Object.fromEntries(Object.entries(input.sections).map(([id, item]) => { if (!/^[\w-]{1,60}$/.test(id) || !item || typeof item !== 'object') throw new Error('Invalid section.'); return [id, { id, title: text(item.title, 'Section title', true, 120), enabled: bool(item.enabled), type: text(item.type || id, 'Section type', false, 60), content: text(item.content || '', 'Section content', false, 10000) }]; }));
-  const ui = input.ui || {}; const accent = color(ui.accent || ui.accentColor); const footer = text(ui.footer || ui.footerText || '', 'Footer text', false, 500);
-  const quickLinks = list(input.quickLinks || [], 'Quick links').map((item, i) => ({ id: String(item.id || `quick-${i + 1}`), title: text(item.title, 'Quick link title', true, 100), icon: text(item.icon || '◉', 'Quick link icon', false, 20), url: checkedUrl(item.url, 'Quick link URL', true), enabled: bool(item.enabled) }));
-  return { profile, socials, stats, scripts, sections, ui: { title: text(ui.title || 'YU🔵 — Roblox Scripts & Tools', 'Site title', true, 180), accent, accentColor: accent, background: text(ui.background || '#030812', 'Background', false, 40), theme: ['dark', 'light'].includes(ui.theme) ? ui.theme : 'dark', footer, footerText: footer }, quickLinks };
+  const sections = Object.fromEntries(Object.entries(input.sections).map(([id, item]) => {
+    if (!/^[\w-]{1,60}$/.test(id) || !item || typeof item !== 'object') throw new Error('Invalid section.');
+    return [id, { enabled: bool(item.enabled), title: text(item.title || id, 'Section title', true, 160) }];
+  }));
+  const ui = input.ui || {};
+  const accent = color(ui.accent || ui.accentColor);
+  const footer = text(ui.footer || ui.footerText || '', 'Footer text', false, 500);
+  const quickLinks = list(input.quickLinks || [], 'Quick links').map((item, i) => ({
+    id: String(item.id || `quick-${i + 1}`), title: text(item.title, 'Quick link title', true, 100),
+    icon: text(item.icon || '◉', 'Quick link icon', false, 20), url: checkedUrl(item.url, 'Quick link URL', true), enabled: bool(item.enabled)
+  }));
+  return { profile, socials, stats, scripts, sections, ui: {
+    title: text(ui.title || 'YU🔵 — Roblox Scripts & Tools', 'Site title', true, 180), accent, accentColor: accent,
+    background: text(ui.background || '#030812', 'Background', false, 40), theme: ['dark', 'light'].includes(ui.theme) ? ui.theme : 'dark', footer, footerText: footer
+  }, quickLinks };
 }
 
-app.get('/api/site-config', (req, res) => { try { return res.json(getConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
-app.post('/api/admin/login', loginLimiter, sameOrigin, async (req, res) => { try { const username = text(req.body?.username, 'Username', true, 120); const password = typeof req.body?.password === 'string' ? req.body.password : ''; if (username !== adminUsername || !(await bcrypt.compare(password, await bcrypt.hash(adminPassword, 12)))) return sendError(res, 401, 'Invalid username or password.'); req.session.regenerate(error => { if (error) return sendError(res, 500, 'Unable to create session.'); req.session.admin = { id: 1, username: adminUsername }; return res.json({ authenticated: true, username: adminUsername }); }); } catch (error) { return sendError(res, 400, error.message || 'Invalid login request.'); } });
-app.post('/api/admin/logout', requireAdmin, sameOrigin, (req, res) => req.session.destroy(error => error ? sendError(res, 500, 'Unable to log out.') : (res.clearCookie('yu_admin_session'), res.json({ authenticated: false }))));
+app.get('/api/site-config', (req, res) => { try { return res.json(readConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
 app.get('/api/admin/session', (req, res) => res.json({ authenticated: Boolean(req.session?.admin?.id), username: req.session?.admin?.username || null }));
-app.get('/api/admin/site-config', requireAdmin, (req, res) => { try { return res.json(getConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
-app.put('/api/admin/site-config', requireAdmin, sameOrigin, (req, res) => { try { return res.json(saveConfig(normalizeConfig(req.body))); } catch (error) { return sendError(res, 400, error.message || 'Invalid configuration.'); } });
+app.post('/api/admin/login', loginLimiter, sameOrigin, async (req, res) => {
+  try {
+    const username = text(req.body?.username, 'Username', true, 120);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const validPassword = await bcrypt.compare(password, await adminPasswordHash);
+    if (username !== adminUsername || !validPassword) return sendError(res, 401, 'Invalid username or password.');
+    req.session.regenerate(error => {
+      if (error) return sendError(res, 500, 'Unable to create session.');
+      req.session.admin = { id: 1, username: adminUsername };
+      return res.json({ authenticated: true, username: adminUsername });
+    });
+  } catch (error) { return sendError(res, 400, error.message || 'Invalid login request.'); }
+});
+app.post('/api/admin/logout', requireAdmin, sameOrigin, (req, res) => req.session.destroy(error => error ? sendError(res, 500, 'Unable to log out.') : (res.clearCookie('yu_admin_session'), res.json({ authenticated: false }))));
+app.get('/api/admin/site-config', requireAdmin, (req, res) => { try { return res.json(readConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
+app.put('/api/admin/site-config', requireAdmin, sameOrigin, (req, res) => { try { const config = normalizeConfig(req.body); return res.json(writeConfig(config)); } catch (error) { return sendError(res, 400, error.message || 'Invalid configuration.'); } });
 
 app.get('/', (req, res) => res.sendFile(path.join(root, 'index.html')));
 app.get('/admin/', (req, res) => res.sendFile(path.join(root, 'admin', 'index.html')));
