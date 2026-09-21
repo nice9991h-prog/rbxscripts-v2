@@ -178,8 +178,8 @@ function normalizeConfig(input) {
     enabled: bool(item.enabled)
   }));
 
-  if (!input.sections || typeof input.sections !== "object" || Array.isArray(input.sections)) {
-    throw new Error("Sections must be an object.");
+  if (!/^[\w-]{1,60}$/.test(id) {
+    throw new Error("Invalid section.");
   }
   const sections = Object.fromEntries(Object.entries(input.sections).map(([id, item]) => {
     if (!/^[\w-]{1,60}$/.test(id) || !item || typeof item !== "object") {
