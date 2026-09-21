@@ -1,1 +1,109 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YU Admin</title><link rel="stylesheet" href="admin.css"></head><body><aside><a class="brand" href="../">♛ YU🔵</a><nav><a href="#dashboard">Dashboard</a><a href="#profile">Profile</a><a href="#socials">Social Links</a><a href="#scripts">Scripts</a><a href="#stats">Stats</a><a href="#sections">Sections</a><a href="#settings">UI Settings</a></nav><a href="../" target="_blank">Preview ↗</a></aside><main><header><div><p class="eyebrow">CONTROL CENTER</p><h1>Website Admin</h1></div><div><button id="reset">Reset</button><button id="save" class="primary">Save</button></div></header><p id="status" class="status"></p><section id="dashboard" class="card"><h2>Dashboard</h2><p>Edit the YU🔵 public site. Changes are saved through the server API and become visible to all visitors.</p></section><section id="profile" class="card"><h2>Profile</h2><div class="grid"><label>Name<input data-path="profile.name"></label><label>Role<input data-path="profile.role"></label><label>Location<input data-path="profile.location"></label><label>Joined<input data-path="profile.joined"></label><label>Profile image<input data-path="profile.image"></label><label class="wide">Bio<textarea data-path="profile.bio"></textarea></label><label><input type="checkbox" data-path="profile.verified"> Verified badge</label></div></section><section id="socials" class="card"><h2>Social links <button class="add" data-add="socials">+ Add</button></h2><div id="socialEditor"></div></section><section id="scripts" class="card"><h2>Scripts <button class="add" data-add="scripts">+ Add</button></h2><div id="scriptEditor"></div></section><section id="stats" class="card"><h2>Stats <button class="add" data-add="stats">+ Add</button></h2><div id="statEditor"></div></section><section id="sections" class="card"><h2>Sections</h2><div id="sectionEditor"></div></section><section id="settings" class="card"><h2>UI Settings</h2><div class="grid"><label>Site title<input data-path="ui.title"></label><label>Accent color<input type="color" data-path="ui.accent"></label><label>Theme<select data-path="ui.theme"><option>dark</option><option>light</option></select></label><label class="wide">Footer text<input data-path="ui.footer"></label></div></section></main><script src="admin.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YU Admin</title>
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <div id="loginView" class="login">
+      <form id="loginForm" class="card">
+        <a class="brand" href="../">♛ YU🔵</a>
+        <h1>Admin sign in</h1>
+        <p id="loginError" class="error"></p>
+        <label>
+          Username
+          <input name="username" autocomplete="username" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+    </div>
+
+    <div id="app" hidden>
+      <aside>
+        <a class="brand" href="../">♛ YU🔵</a>
+        <nav>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#profile">Profile</a>
+          <a href="#socials">Social Links</a>
+          <a href="#scripts">Scripts</a>
+          <a href="#stats">Stats</a>
+          <a href="#sections">Sections</a>
+          <a href="#settings">UI Settings</a>
+        </nav>
+        <a href="../" target="_blank" rel="noopener">Preview ↗</a>
+        <button id="logout" type="button">Log out</button>
+      </aside>
+
+      <main>
+        <header>
+          <div>
+            <p class="eyebrow">CONTROL CENTER</p>
+            <h1>Website Admin</h1>
+          </div>
+          <div>
+            <button id="reset" type="button">Reset</button>
+            <button id="save" class="primary" type="button">Save</button>
+          </div>
+        </header>
+
+        <p id="status" class="status"></p>
+
+        <section id="dashboard" class="card">
+          <h2>Dashboard</h2>
+          <p>Edit the YU🔵 public site. Changes are saved securely on the server.</p>
+        </section>
+
+        <section id="profile" class="card">
+          <h2>Profile</h2>
+          <div class="grid">
+            <label>Name<input data-path="profile.name" /></label>
+            <label>Role<input data-path="profile.role" /></label>
+            <label>Location<input data-path="profile.location" /></label>
+            <label>Joined<input data-path="profile.joined" /></label>
+            <label>Profile image<input data-path="profile.image" /></label>
+            <label class="wide">Bio<textarea data-path="profile.bio"></textarea></label>
+            <label><input type="checkbox" data-path="profile.verified" /> Verified badge</label>
+          </div>
+        </section>
+
+        <section id="socials" class="card">
+          <h2>Social links <button class="add" data-add="socials" type="button">+ Add</button></h2>
+          <div id="socialEditor"></div>
+        </section>
+
+        <section id="scripts" class="card">
+          <h2>Scripts <button class="add" data-add="scripts" type="button">+ Add</button></h2>
+          <div id="scriptEditor"></div>
+        </section>
+
+        <section id="stats" class="card">
+          <h2>Stats <button class="add" data-add="stats" type="button">+ Add</button></h2>
+          <div id="statEditor"></div>
+        </section>
+
+        <section id="sections" class="card">
+          <h2>Sections</h2>
+          <div id="sectionEditor"></div>
+        </section>
+
+        <section id="settings" class="card">
+          <h2>UI Settings</h2>
+          <div class="grid">
+            <label>Site title<input data-path="ui.title" /></label>
+            <label>Accent color<input type="color" data-path="ui.accent" /></label>
+            <label>Theme<select data-path="ui.theme"><option>dark</option><option>light</option></select></label>
+            <label class="wide">Footer text<input data-path="ui.footer" /></label>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="admin.js"></script>
+  </body>
+</html>
