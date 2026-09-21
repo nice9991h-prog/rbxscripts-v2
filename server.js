@@ -1,11 +1,11 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { getConfig, saveConfig, findAdmin, createAdmin } = require('./db');
+const { getConfig, saveConfig } = require('./db');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -14,7 +14,6 @@ const sessionSecret = process.env.SESSION_SECRET;
 const adminUsername = process.env.ADMIN_USERNAME;
 const adminPassword = process.env.ADMIN_PASSWORD;
 const root = __dirname;
-const dataDir = path.join(root, '.data');
 
 if (!sessionSecret || sessionSecret.length < 32) throw new Error('SESSION_SECRET must be set to at least 32 characters.');
 if (!adminUsername || !adminPassword) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be set.');
@@ -47,10 +46,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// This uses express-session's dependency-free in-memory store for Termux compatibility.
+// For multi-process production deployments, replace it with a remote session store.
 app.use(session({
   name: 'yu_admin_session',
   secret: sessionSecret,
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: dataDir, concurrentDB: true }),
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'strict', secure: isProduction, maxAge: 1000 * 60 * 60 * 8 }
@@ -78,15 +78,13 @@ function normalizeConfig(input) {
   return { profile, socials, stats, scripts, sections, ui: { title: text(ui.title || 'YU🔵 — Roblox Scripts & Tools', 'Site title', true, 180), accent, accentColor: accent, background: text(ui.background || '#030812', 'Background', false, 40), theme: ['dark', 'light'].includes(ui.theme) ? ui.theme : 'dark', footer, footerText: footer }, quickLinks };
 }
 
-async function ensureAdmin() { if (!findAdmin(adminUsername)) createAdmin(adminUsername, await bcrypt.hash(adminPassword, 12)); }
 app.get('/api/site-config', (req, res) => { try { return res.json(getConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
-app.post('/api/admin/login', loginLimiter, sameOrigin, async (req, res) => { try { const username = text(req.body?.username, 'Username', true, 120); const password = typeof req.body?.password === 'string' ? req.body.password : ''; const user = findAdmin(username); if (!user || !(await bcrypt.compare(password, user.password_hash))) return sendError(res, 401, 'Invalid username or password.'); req.session.regenerate(error => { if (error) return sendError(res, 500, 'Unable to create session.'); req.session.admin = { id: user.id, username: user.username }; return res.json({ authenticated: true, username: user.username }); }); } catch (error) { return sendError(res, 400, error.message || 'Invalid login request.'); } });
+app.post('/api/admin/login', loginLimiter, sameOrigin, async (req, res) => { try { const username = text(req.body?.username, 'Username', true, 120); const password = typeof req.body?.password === 'string' ? req.body.password : ''; if (username !== adminUsername || !(await bcrypt.compare(password, await bcrypt.hash(adminPassword, 12)))) return sendError(res, 401, 'Invalid username or password.'); req.session.regenerate(error => { if (error) return sendError(res, 500, 'Unable to create session.'); req.session.admin = { id: 1, username: adminUsername }; return res.json({ authenticated: true, username: adminUsername }); }); } catch (error) { return sendError(res, 400, error.message || 'Invalid login request.'); } });
 app.post('/api/admin/logout', requireAdmin, sameOrigin, (req, res) => req.session.destroy(error => error ? sendError(res, 500, 'Unable to log out.') : (res.clearCookie('yu_admin_session'), res.json({ authenticated: false }))));
 app.get('/api/admin/session', (req, res) => res.json({ authenticated: Boolean(req.session?.admin?.id), username: req.session?.admin?.username || null }));
 app.get('/api/admin/site-config', requireAdmin, (req, res) => { try { return res.json(getConfig()); } catch { return sendError(res, 500, 'Unable to load site configuration.'); } });
 app.put('/api/admin/site-config', requireAdmin, sameOrigin, (req, res) => { try { return res.json(saveConfig(normalizeConfig(req.body))); } catch (error) { return sendError(res, 400, error.message || 'Invalid configuration.'); } });
 
-// Serve only the public app. Sensitive server/database/config files are never passed to express.static.
 app.get('/', (req, res) => res.sendFile(path.join(root, 'index.html')));
 app.get('/admin/', (req, res) => res.sendFile(path.join(root, 'admin', 'index.html')));
 app.get('/admin/index.html', (req, res) => res.sendFile(path.join(root, 'admin', 'index.html')));
@@ -98,4 +96,4 @@ app.use('/admin', express.static(path.join(root, 'admin'), { dotfiles: 'deny', i
 app.use((req, res) => req.path.startsWith('/api/') ? sendError(res, 404, 'Not found.') : res.status(404).send('Not found.'));
 app.use((error, req, res, next) => { if (error instanceof SyntaxError && error.status === 400) return sendError(res, 400, 'Invalid JSON.'); console.error('Unhandled server error:', error); return sendError(res, 500, 'Internal server error.'); });
 
-(async () => { try { await ensureAdmin(); app.listen(PORT, () => console.log(`YU server listening on http://localhost:${PORT}`)); } catch (error) { console.error('Startup failed:', error.message); process.exit(1); } })();
+app.listen(PORT, () => console.log(`YU server listening on http://localhost:${PORT}`));
