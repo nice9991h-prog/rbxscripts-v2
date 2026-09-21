@@ -1,0 +1,33 @@
+{
+  "profile": {
+    "name": "YU",
+    "verified": true,
+    "role": "Roblox Script Creator | Developer",
+    "quote": "Better Scripts, Better Experience.",
+    "bio": "Hi! I’m YU, a Roblox script creator and developer.\nI make simple, useful and high quality scripts for everyone.\nThanks for visiting my page! 🙏",
+    "location": "Cambodia",
+    "joined": "Sep 2025",
+    "platform": "Roblox",
+    "image": "assets/reference-ui.png"
+  },
+  "socials": [
+    {"icon":"▶","title":"YouTube","url":"#","enabled":true},
+    {"icon":"♪","title":"TikTok","url":"#","enabled":true},
+    {"icon":"◉","title":"Discord","url":"#","enabled":true},
+    {"icon":"✉","title":"Email","url":"mailto:yu@example.com","enabled":true}
+  ],
+  "stats": [
+    {"icon":"🚀","value":"27","label":"Scripts"},
+    {"icon":"★","value":"1.8K","label":"Followers"},
+    {"icon":"▣","value":"12","label":"Projects"},
+    {"icon":"♥","value":"3.2K","label":"Likes"}
+  ],
+  "scripts": [
+    {"name":"Blox Fruits Script","description":"Fast Roblox script tools.","url":"https://example.com/blox-fruits","tags":["Auto Farm","ESP","Fast"],"thumbnail":"","enabled":true},
+    {"name":"Steal a Brainrot","description":"Useful collection and movement tools.","url":"https://example.com/brainrot","tags":["Auto Collect","ESP","TP"],"thumbnail":"","enabled":true},
+    {"name":"BedWars Script","description":"A modern BedWars utility script.","url":"https://example.com/bedwars","tags":["Auto Farm","ESP","Kill Aura"],"thumbnail":"","enabled":true}
+  ],
+  "sections":{"about":{"enabled":true,"title":"About Me"},"projects":{"enabled":true,"title":"Projects"},"scripts":{"enabled":true,"title":"Featured Scripts"},"support":{"enabled":true,"title":"Support Me"},"contact":{"enabled":true,"title":"Quick Links"}},
+  "ui":{"title":"YU🔵 — Roblox Scripts & Tools","accent":"#14a8ff","theme":"dark","footer":"♛ YU🔵 | Roblox Scripts & Tools | Made with ❤️ for the community"},
+  "quickLinks":[]
+}
